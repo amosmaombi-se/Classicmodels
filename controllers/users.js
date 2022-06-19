@@ -34,7 +34,7 @@ const login = (req, res) => {
   query = "select email,password,role,status from users where email=?";
   connection.query(query, [user.email], (err, results) => {
     if (!err) {
-      if (results.length <= 0 || results[0].password != user.password) {
+      if (results.length <= 0 || results[0].password !== user.password) {
         return res.status(401).json({ message: "Incorrect username or password" });
       }
       else if (results[0].status == 'false') {
