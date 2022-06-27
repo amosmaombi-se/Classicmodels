@@ -2,16 +2,20 @@ const express = require('express');
 const connection = require('../connection');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs')
 require('dotenv').config();
 
-const signUp = (req, res) => {
-  let user = req.body;
+const signUp = async (req, res) => {
+  const user = req.body;
+  const salt = await bcrypt.genSalt(10)
+  const password = req.body.password;    
+  const encryptedPassword = await  bcrypt.hash(password, salt)
   query = "select email,password,role,status from users where email=?";
   connection.query(query, [user.email], (err, results) => {
     if (!err) {
       if (results.length <= 0) {
         query = "insert into users(fullname,phone,email,address,password,status,role) values(?,?,?,?,?,'false','user')";
-        connection.query(query, [user.fullname, user.phone, user.email, user.address, user.password], (err, results) => {
+        connection.query(query, [user.fullname, user.phone, user.email, user.address, encryptedPassword,user.role], (err, results) => {
           if (!err) {
             return res.status(200).json({ message: "Successfully Registered" });
           }
@@ -29,21 +33,27 @@ const signUp = (req, res) => {
 }
 
 
-const login = (req, res) => {
-  let user = req.body;
+const login = async (req, res) => {
+  const user = req.body;
+  const password = req.body.password; 
   query = "select email,password,role,status from users where email=?";
-  connection.query(query, [user.email], (err, results) => {
+  connection.query(query, [user.email,user.role], (err, results) => {
     if (!err) {
-      if (results.length <= 0 || results[0].password !== user.password) {
+      if (results.length <= 0) {
         return res.status(401).json({ message: "Incorrect username or password" });
       }
-      else if (results[0].status == 'false') {
-        return res.status(401).json({ message: "Wait for Admin approval" });
-      }
-      else if (results[0].password == user.password) {
-        const response = { email: results[0].email, role: results[0].role }
-        const accessToken = jwt.sign(response, process.env.ACCESS_TOKEN, { expiresIn: '8h' })
-        res.status(200).json({ token: accessToken });
+     
+      else if (results.length > 0) {
+        const comparison = bcrypt.compare(password, results[0].password)
+        if(comparison){
+            const response = { email: results[0].email, role: results[0].role }
+            const accessToken = jwt.sign(response, process.env.ACCESS_TOKEN, { expiresIn: '30d' })
+            res.status(200).json({ token: accessToken});
+        }else{
+          res.status(204).json({message:"Email and password does not match" })                
+         
+        }
+      
       }
       else {
         return res.status(400).json({ message: "Something went wrong.Please try again later" });
